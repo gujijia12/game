@@ -13,6 +13,7 @@ class CombatSystem {
         this.tickCount = 0;
         this.maxTicks = 500;
         this.combatLog = [];
+        this.occupiedCache = null;
     }
 
     startCombat(playerBoard, enemyBoard, playerSynergies, enemySynergies) {
@@ -100,8 +101,11 @@ class CombatSystem {
         this.tickCount++;
         const dt = this.tickRate / 1000;
 
-        const aliveUnits = [...this.playerUnits, ...this.enemyUnits].filter(u => u.alive);
+        const playerAliveAtTickStart = this.playerUnits.filter(u => u.alive);
+        const enemyAliveAtTickStart = this.enemyUnits.filter(u => u.alive);
+        const aliveUnits = [...playerAliveAtTickStart, ...enemyAliveAtTickStart];
         aliveUnits.sort(() => Math.random() - 0.5);
+        this.occupiedCache = new Set(aliveUnits.map(u => `${u.combatRow},${u.combatCol}`));
 
         const events = [];
 
@@ -109,8 +113,8 @@ class CombatSystem {
             if (!unit.alive) continue;
 
             const enemies = unit.team === 'player'
-                ? this.enemyUnits.filter(u => u.alive)
-                : this.playerUnits.filter(u => u.alive);
+                ? enemyAliveAtTickStart
+                : playerAliveAtTickStart;
 
             if (enemies.length === 0) continue;
 
@@ -152,6 +156,8 @@ class CombatSystem {
         if (this.onTick) {
             this.onTick(events, allUnits);
         }
+
+        this.occupiedCache = null;
 
         const playerAlive = this.playerUnits.filter(u => u.alive);
         const enemyAlive = this.enemyUnits.filter(u => u.alive);
@@ -211,6 +217,9 @@ class CombatSystem {
         if (target.currentHp <= 0) {
             target.currentHp = 0;
             target.alive = false;
+            if (this.occupiedCache) {
+                this.occupiedCache.delete(`${target.combatRow},${target.combatCol}`);
+            }
         }
 
         this.combatLog.push(
@@ -234,6 +243,7 @@ class CombatSystem {
         let minDist = Infinity;
 
         for (const enemy of enemies) {
+            if (!enemy.alive) continue;
             const dist = this.getDistance(unit, enemy);
             if (dist < minDist) {
                 minDist = dist;
@@ -256,19 +266,41 @@ class CombatSystem {
         const newCol = unit.combatCol + dc;
 
         if (!this.isOccupied(newRow, newCol, unit)) {
+            if (this.occupiedCache) {
+                this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
+            }
             unit.combatRow = newRow;
             unit.combatCol = newCol;
+            if (this.occupiedCache) {
+                this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
+            }
         } else {
             if (dr !== 0 && !this.isOccupied(unit.combatRow + dr, unit.combatCol, unit)) {
+                if (this.occupiedCache) {
+                    this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
+                }
                 unit.combatRow += dr;
+                if (this.occupiedCache) {
+                    this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
+                }
             } else if (dc !== 0 && !this.isOccupied(unit.combatRow, unit.combatCol + dc, unit)) {
+                if (this.occupiedCache) {
+                    this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
+                }
                 unit.combatCol += dc;
+                if (this.occupiedCache) {
+                    this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
+                }
             }
         }
     }
 
     isOccupied(row, col, excludeUnit) {
         if (row < 0 || row >= BOARD_ROWS * 2 || col < 0 || col >= BOARD_COLS) return true;
+        if (excludeUnit && row === excludeUnit.combatRow && col === excludeUnit.combatCol) return false;
+        if (this.occupiedCache) {
+            return this.occupiedCache.has(`${row},${col}`);
+        }
         const all = [...this.playerUnits, ...this.enemyUnits];
         return all.some(u => u.alive && u !== excludeUnit && u.combatRow === row && u.combatCol === col);
     }

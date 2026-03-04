@@ -4,6 +4,10 @@
 
 const UI = {
     elements: {},
+    playerBoardCells: [],
+    enemyBoardCells: [],
+    benchCells: [],
+    combatUnitElements: new Map(),
 
     isMobile: false,
     battleStarting: false,
@@ -77,6 +81,9 @@ const UI = {
         this.elements.playerBoard.innerHTML = '';
         this.elements.enemyBoard.innerHTML = '';
         this.elements.benchGrid.innerHTML = '';
+        this.playerBoardCells = [];
+        this.enemyBoardCells = [];
+        this.benchCells = [];
 
         for (let r = 0; r < BOARD_ROWS; r++) {
             for (let c = 0; c < BOARD_COLS; c++) {
@@ -86,6 +93,7 @@ const UI = {
                 cell.dataset.col = c;
                 cell.dataset.source = 'board';
                 this.elements.playerBoard.appendChild(cell);
+                this.playerBoardCells.push(cell);
             }
         }
 
@@ -97,6 +105,7 @@ const UI = {
                 cell.dataset.col = c;
                 cell.dataset.source = 'enemy';
                 this.elements.enemyBoard.appendChild(cell);
+                this.enemyBoardCells.push(cell);
             }
         }
 
@@ -106,6 +115,7 @@ const UI = {
             cell.dataset.col = c;
             cell.dataset.source = 'bench';
             this.elements.benchGrid.appendChild(cell);
+            this.benchCells.push(cell);
         }
     },
 
@@ -343,8 +353,7 @@ const UI = {
     },
 
     renderPlayerBoard() {
-        const cells = this.elements.playerBoard.querySelectorAll('.board-cell');
-        cells.forEach(cell => {
+        this.playerBoardCells.forEach(cell => {
             const r = parseInt(cell.dataset.row);
             const c = parseInt(cell.dataset.col);
             const unit = gameState.board[r][c];
@@ -384,8 +393,7 @@ const UI = {
     },
 
     renderEnemyBoard(combatUnits) {
-        const cells = this.elements.enemyBoard.querySelectorAll('.board-cell');
-        cells.forEach(cell => {
+        this.enemyBoardCells.forEach(cell => {
             cell.innerHTML = '';
         });
 
@@ -397,7 +405,7 @@ const UI = {
             const c = unit.combatCol;
             if (r >= 0 && r < BOARD_ROWS) {
                 const cellIdx = r * BOARD_COLS + c;
-                const cell = cells[cellIdx];
+                const cell = this.enemyBoardCells[cellIdx];
                 if (cell) {
                     cell.appendChild(this.createUnitElement(unit, true, true));
                 }
@@ -406,8 +414,9 @@ const UI = {
     },
 
     renderCombatBoard(allUnits) {
-        const playerCells = this.elements.playerBoard.querySelectorAll('.board-cell');
-        const enemyCells = this.elements.enemyBoard.querySelectorAll('.board-cell');
+        const playerCells = this.playerBoardCells;
+        const enemyCells = this.enemyBoardCells;
+        this.combatUnitElements.clear();
 
         playerCells.forEach(cell => { cell.innerHTML = ''; });
         enemyCells.forEach(cell => { cell.innerHTML = ''; });
@@ -421,22 +430,25 @@ const UI = {
                 const cellIdx = displayRow * BOARD_COLS + unit.combatCol;
                 const cell = playerCells[cellIdx];
                 if (cell) {
-                    cell.appendChild(this.createUnitElement(unit, true, unit.team === 'enemy'));
+                    const unitEl = this.createUnitElement(unit, true, unit.team === 'enemy');
+                    cell.appendChild(unitEl);
+                    this.combatUnitElements.set(unit.uid, unitEl);
                 }
             } else {
                 const displayRow = unit.combatRow;
                 const cellIdx = displayRow * BOARD_COLS + unit.combatCol;
                 const cell = enemyCells[cellIdx];
                 if (cell) {
-                    cell.appendChild(this.createUnitElement(unit, true, unit.team === 'enemy'));
+                    const unitEl = this.createUnitElement(unit, true, unit.team === 'enemy');
+                    cell.appendChild(unitEl);
+                    this.combatUnitElements.set(unit.uid, unitEl);
                 }
             }
         }
     },
 
     renderBench() {
-        const cells = this.elements.benchGrid.querySelectorAll('.bench-cell');
-        cells.forEach((cell, i) => {
+        this.benchCells.forEach((cell, i) => {
             cell.innerHTML = '';
             cell.classList.remove('selected');
             const unit = gameState.bench[i];
@@ -645,7 +657,7 @@ const UI = {
     handleCombatEvents(events) {
         for (const event of events) {
             if (event.type === 'attack') {
-                const targetEl = document.querySelector(`[data-uid="${event.target.uid}"]`);
+                const targetEl = this.combatUnitElements.get(event.target.uid);
                 if (targetEl) {
                     targetEl.classList.add('hit');
                     setTimeout(() => targetEl.classList.remove('hit'), 300);
@@ -655,7 +667,7 @@ const UI = {
                     }
                 }
 
-                const attackerEl = document.querySelector(`[data-uid="${event.attacker.uid}"]`);
+                const attackerEl = this.combatUnitElements.get(event.attacker.uid);
                 if (attackerEl) {
                     attackerEl.classList.add('attacking');
                     setTimeout(() => attackerEl.classList.remove('attacking'), 300);
@@ -666,7 +678,7 @@ const UI = {
             } else if (event.type === 'miss') {
                 this.addCombatLogEntry(`${event.target.name} 闪避了 ${event.attacker.name} 的攻击`, 'log-info');
             } else if (event.type === 'death') {
-                const el = document.querySelector(`[data-uid="${event.unit.uid}"]`);
+                const el = this.combatUnitElements.get(event.unit.uid);
                 if (el) {
                     el.classList.add('dying');
                 }
