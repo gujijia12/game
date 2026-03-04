@@ -27,7 +27,10 @@ class CombatSystem {
             for (let c = 0; c < BOARD_COLS; c++) {
                 if (playerBoard[r][c]) {
                     const u = this.cloneUnitForCombat(playerBoard[r][c]);
-                    u.combatRow = BOARD_ROWS + (BOARD_ROWS - 1 - r);
+                    // Keep combat coordinates consistent with UI rows:
+                    // player row 0 (near divider) -> combat row 4
+                    // player row 3 (bottom)        -> combat row 7
+                    u.combatRow = BOARD_ROWS + r;
                     u.combatCol = c;
                     u.team = 'player';
                     this.playerUnits.push(u);
@@ -259,39 +262,45 @@ class CombatSystem {
     }
 
     moveToward(unit, target) {
-        const dr = Math.sign(target.combatRow - unit.combatRow);
-        const dc = Math.sign(target.combatCol - unit.combatCol);
+        const preferredForward = unit.team === 'player' ? -1 : 1;
+        const towardRow = Math.sign(target.combatRow - unit.combatRow);
+        const towardCol = Math.sign(target.combatCol - unit.combatCol);
 
-        const newRow = unit.combatRow + dr;
-        const newCol = unit.combatCol + dc;
+        // Build candidate one-step moves and pick the best score.
+        // Score prefers: (1) closer to target, (2) moving in team forward direction.
+        const candidates = [];
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = unit.combatRow + dr;
+                const nc = unit.combatCol + dc;
+                if (this.isOccupied(nr, nc, unit)) continue;
 
-        if (!this.isOccupied(newRow, newCol, unit)) {
-            if (this.occupiedCache) {
-                this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
+                const targetDist = Math.abs(target.combatRow - nr) + Math.abs(target.combatCol - nc);
+                let dirPenalty = 0.2;
+                if (dr === preferredForward) dirPenalty = 0;
+                else if (dr === 0) dirPenalty = 0.15;
+                else if (dr === -preferredForward) dirPenalty = 0.6;
+
+                // Small preference for moving toward target row/col directions.
+                const rowAlignPenalty = dr === towardRow ? 0 : 0.05;
+                const colAlignPenalty = dc === towardCol ? 0 : 0.05;
+                const score = targetDist + dirPenalty + rowAlignPenalty + colAlignPenalty;
+                candidates.push({ nr, nc, score });
             }
-            unit.combatRow = newRow;
-            unit.combatCol = newCol;
-            if (this.occupiedCache) {
-                this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
-            }
-        } else {
-            if (dr !== 0 && !this.isOccupied(unit.combatRow + dr, unit.combatCol, unit)) {
-                if (this.occupiedCache) {
-                    this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
-                }
-                unit.combatRow += dr;
-                if (this.occupiedCache) {
-                    this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
-                }
-            } else if (dc !== 0 && !this.isOccupied(unit.combatRow, unit.combatCol + dc, unit)) {
-                if (this.occupiedCache) {
-                    this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
-                }
-                unit.combatCol += dc;
-                if (this.occupiedCache) {
-                    this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
-                }
-            }
+        }
+
+        if (candidates.length === 0) return;
+        candidates.sort((a, b) => a.score - b.score);
+        const best = candidates[0];
+
+        if (this.occupiedCache) {
+            this.occupiedCache.delete(`${unit.combatRow},${unit.combatCol}`);
+        }
+        unit.combatRow = best.nr;
+        unit.combatCol = best.nc;
+        if (this.occupiedCache) {
+            this.occupiedCache.add(`${unit.combatRow},${unit.combatCol}`);
         }
     }
 

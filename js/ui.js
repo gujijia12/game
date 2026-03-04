@@ -425,8 +425,7 @@ const UI = {
             if (!unit.alive) continue;
 
             if (unit.combatRow >= BOARD_ROWS) {
-                const localRow = unit.combatRow - BOARD_ROWS;
-                const displayRow = BOARD_ROWS - 1 - localRow;
+                const displayRow = unit.combatRow - BOARD_ROWS;
                 const cellIdx = displayRow * BOARD_COLS + unit.combatCol;
                 const cell = playerCells[cellIdx];
                 if (cell) {
