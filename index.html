@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="description" content="电子斗蛐蛐 - 一款自走棋单机网页游戏。购买棋子、布阵迎战、合成升星、激活羁绊，挑战30回合！">
+    <meta name="keywords" content="自走棋,电子斗蛐蛐,网页游戏,HTML5游戏,auto chess">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta property="og:title" content="电子斗蛐蛐 - 自走棋">
+    <meta property="og:description" content="一款自走棋单机网页游戏，购买棋子、布阵迎战、合成升星、激活羁绊！">
+    <meta property="og:type" content="website">
+    <title>电子斗蛐蛐 - 自走棋</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- AD_HEAD_PLACEHOLDER: 广告 SDK 在此引入 -->
+</head>
+<body>
+    <div id="game-container">
+        <!-- 顶部信息栏 -->
+        <div id="top-bar">
+            <div class="top-bar-row">
+                <div class="info-group">
+                    <span class="label">回合</span>
+                    <span id="round-num" class="value">1</span>
+                </div>
+                <div class="info-group">
+                    <span class="label">生命</span>
+                    <div id="hp-bar-container">
+                        <div id="hp-bar"></div>
+                        <span id="hp-text">100</span>
+                    </div>
+                </div>
+                <div class="info-group">
+                    <span class="label">等级</span>
+                    <span id="level-num" class="value">1</span>
+                    <div id="xp-bar-container">
+                        <div id="xp-bar"></div>
+                    </div>
+                </div>
+                <div class="info-group gold-group">
+                    <span class="label">金币</span>
+                    <span id="gold-num" class="value gold-value">5</span>
+                </div>
+                <div class="info-group">
+                    <span id="phase-text" class="phase-label">准备阶段</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主游戏区域 -->
+        <div id="main-area">
+            <!-- 左侧羁绊面板 -->
+            <div id="synergy-panel">
+                <h3>羁绊</h3>
+                <div id="synergy-list"></div>
+            </div>
+
+            <!-- 中间棋盘区域 -->
+            <div id="board-area">
+                <!-- 对手信息 -->
+                <div id="enemy-info">
+                    <span id="enemy-name">对手</span>
+                    <span id="enemy-hp-text">HP: 100</span>
+                </div>
+
+                <!-- 对手棋盘 -->
+                <div id="enemy-board" class="board-grid"></div>
+
+                <!-- 分隔线 -->
+                <div id="board-divider">
+                    <span>⚔️ 战场 ⚔️</span>
+                </div>
+
+                <!-- 玩家棋盘 -->
+                <div id="player-board" class="board-grid"></div>
+
+                <!-- 备战席 -->
+                <div id="bench-area">
+                    <div id="bench-label">备战席</div>
+                    <div id="bench-grid"></div>
+                </div>
+            </div>
+
+            <!-- 右侧信息面板 -->
+            <div id="info-panel">
+                <div id="combat-log-container">
+                    <h3>战斗日志</h3>
+                    <div id="combat-log"></div>
+                </div>
+                <div id="unit-detail" class="hidden">
+                    <h3>棋子详情</h3>
+                    <div id="unit-detail-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 移动端面板切换栏 -->
+        <div id="mobile-panel-bar">
+            <button id="btn-toggle-synergy" class="mobile-panel-btn">🔗 羁绊</button>
+            <button id="btn-toggle-detail" class="mobile-panel-btn">📋 详情</button>
+        </div>
+
+        <!-- 移动端浮层面板 -->
+        <div id="mobile-synergy-overlay" class="mobile-overlay hidden">
+            <div class="mobile-overlay-content">
+                <div class="mobile-overlay-header">
+                    <h3>羁绊</h3>
+                    <button class="mobile-overlay-close" data-close="mobile-synergy-overlay">✕</button>
+                </div>
+                <div id="mobile-synergy-list"></div>
+            </div>
+        </div>
+        <div id="mobile-detail-overlay" class="mobile-overlay hidden">
+            <div class="mobile-overlay-content">
+                <div class="mobile-overlay-header">
+                    <h3>棋子详情</h3>
+                    <button class="mobile-overlay-close" data-close="mobile-detail-overlay">✕</button>
+                </div>
+                <div id="mobile-unit-detail-content"></div>
+            </div>
+        </div>
+
+        <!-- 底部商店区域 -->
+        <div id="shop-area">
+            <div id="shop-units"></div>
+            <div id="shop-controls">
+                <button id="btn-reroll" class="shop-btn">🎲 刷新 (2金)</button>
+                <button id="btn-buy-xp" class="shop-btn">📈 买经验 (4金)</button>
+                <button id="btn-lock" class="shop-btn">🔒 锁定</button>
+                <button id="btn-ready" class="shop-btn ready-btn">⚔️ 开战</button>
+                <button id="btn-sell" class="shop-btn sell-btn">💰 出售</button>
+            </div>
+        </div>
+
+        <!-- 战斗结果弹窗 -->
+        <div id="battle-result" class="modal hidden">
+            <div class="modal-content">
+                <h2 id="result-title"></h2>
+                <p id="result-detail"></p>
+                <div id="ad-slot-result" class="ad-slot"></div>
+                <button id="btn-continue" class="shop-btn ready-btn">继续</button>
+            </div>
+        </div>
+
+        <!-- 游戏结束弹窗 -->
+        <div id="game-over" class="modal hidden">
+            <div class="modal-content">
+                <h2>游戏结束</h2>
+                <p id="game-over-detail"></p>
+                <div id="ad-slot-gameover" class="ad-slot"></div>
+                <button id="btn-restart" class="shop-btn ready-btn">重新开始</button>
+                <div class="share-hint">
+                    <button id="btn-share-gameover" class="share-btn">📤 分享给朋友</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 开始画面 -->
+        <div id="start-screen" class="modal">
+            <div class="modal-content start-content">
+                <h1>🦗 电子斗蛐蛐 🦗</h1>
+                <p class="subtitle">自走棋单机版</p>
+                <div class="game-intro">
+                    <p>🛒 购买棋子，布阵迎战</p>
+                    <p>⭐ 3个相同棋子合成升星</p>
+                    <p>🔗 凑齐羁绊获得加成</p>
+                    <p>⚔️ 棋子自动战斗</p>
+                    <p>🏆 挑战30回合，生存到最后！</p>
+                </div>
+                <div id="ad-slot-start" class="ad-slot"></div>
+                <button id="btn-start" class="shop-btn ready-btn start-btn">开始游戏</button>
+                <div class="share-hint">分享给朋友一起玩 →
+                    <button id="btn-share" class="share-btn">📤 分享</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮动伤害数字容器 -->
+    <div id="floating-numbers"></div>
+
+    <script src="js/data.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/combat.js"></script>
+    <script src="js/ads.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
