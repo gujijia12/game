@@ -130,8 +130,8 @@ const UNIT_POOL_SIZES = { 1: 30, 2: 20, 3: 15, 4: 10, 5: 8 };
 
 const STAR_MULTIPLIERS = {
     1: { hp: 1, attack: 1, armor: 1 },
-    2: { hp: 1.8, attack: 1.8, armor: 1.3 },
-    3: { hp: 3.2, attack: 3.2, armor: 1.6 },
+    2: { hp: 2.0, attack: 2.0, armor: 1.5 },
+    3: { hp: 4.0, attack: 4.0, armor: 2.0 },
 };
 
 const ROUND_CONFIGS = [];
