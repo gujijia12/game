@@ -7,6 +7,7 @@ const UI = {
 
     isMobile: false,
     battleStarting: false,
+    resultTransitioning: false,
     maxFloatingNumbers: 50,
 
     init() {
@@ -156,26 +157,38 @@ const UI = {
         });
 
         this.elements.btnContinue.addEventListener('click', () => {
+            if (this.resultTransitioning) return;
+            if (gameState.phase !== 'result') return;
+            if (this.elements.battleResult.classList.contains('hidden')) return;
+            this.resultTransitioning = true;
+            this.elements.btnContinue.disabled = true;
             this.elements.battleResult.classList.add('hidden');
             this.battleStarting = false;
             if (gameState.hp <= 0) {
                 this.showGameOver();
+                this.finishResultTransition();
                 return;
             }
             if (gameState.round > MAX_ROUND) {
+                this.resetUITransientState();
                 initGameState();
                 AdManager.resetSession();
                 startPrepPhase();
                 this.renderAll();
+                this.finishResultTransition();
                 return;
             }
+            this.resetUITransientState();
             startPrepPhase();
             this.renderAll();
+            this.finishResultTransition();
         });
 
         this.elements.btnRestart.addEventListener('click', () => {
+            this.resultTransitioning = false;
             this.elements.gameOver.classList.add('hidden');
             this.battleStarting = false;
+            this.resetUITransientState();
             initGameState();
             AdManager.resetSession();
             startPrepPhase();
@@ -183,8 +196,10 @@ const UI = {
         });
 
         this.elements.btnStart.addEventListener('click', () => {
+            this.resultTransitioning = false;
             this.elements.startScreen.classList.add('hidden');
             this.battleStarting = false;
+            this.resetUITransientState();
             initGameState();
             AdManager.resetSession();
             startPrepPhase();
@@ -737,6 +752,19 @@ const UI = {
             <div style="margin-top:8px">点击下方重新开始一局。</div>
         `;
         this.elements.btnContinue.textContent = '重新开始';
+    },
+
+    finishResultTransition() {
+        this.resultTransitioning = false;
+        this.elements.btnContinue.disabled = false;
+    },
+
+    resetUITransientState() {
+        this.elements.mobileSynergyOverlay?.classList.add('hidden');
+        this.elements.mobileDetailOverlay?.classList.add('hidden');
+        if (this.elements.mobileUnitDetailContent) this.elements.mobileUnitDetailContent.innerHTML = '';
+        if (this.elements.unitDetailContent) this.elements.unitDetailContent.innerHTML = '';
+        if (this.elements.floatingNumbers) this.elements.floatingNumbers.innerHTML = '';
     },
 
     addCombatLogEntry(text, type = '') {

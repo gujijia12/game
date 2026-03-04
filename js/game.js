@@ -570,7 +570,6 @@ function endCombat(playerWon, survivingEnemies, combatMeta = {}) {
 
     const goldInfo = awardRoundGold();
     gameState.phase = 'result';
-    gameState.shopLocked = false;
     gameState.round++;
     const campaignCleared = gameState.round > MAX_ROUND;
 
