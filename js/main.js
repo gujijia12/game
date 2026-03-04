@@ -4,6 +4,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     UI.init();
+    AdManager.init();
     AdManager.showStartAd();
 
     document.addEventListener('keydown', (e) => {

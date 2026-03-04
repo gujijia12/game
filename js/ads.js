@@ -1,23 +1,50 @@
 /* ============================================
    广告管理模块
    ============================================
-   接入步骤：
-   1. 申请 Google AdSense 账号 (https://www.google.com/adsense/)
-   2. 获得审核通过后，将 data-ad-client 和 data-ad-slot 替换为你的 ID
-   3. 取消 index.html <head> 中 AdSense SDK 的注释
+   使用方式：
+   1. 在 AD_CONFIG.adClient 填入你的 ca-pub-xxxx
+   2. 可选填写各广告位 slot id
+   3. 页面会自动加载 AdSense SDK 并启用
    ============================================ */
+
+const AD_CONFIG = {
+    enabled: false,
+    adClient: '',
+    slots: {
+        start: '',
+        result: '',
+        gameover: ''
+    }
+};
 
 const AdManager = {
     enabled: false,
-    adClient: '',       // 替换为你的 AdSense publisher ID, 如 'ca-pub-1234567890'
+    adClient: '',
+    slots: {
+        start: '',
+        result: '',
+        gameover: ''
+    },
     roundsSinceLastAd: 0,
     AD_INTERVAL: 3,     // 每隔几回合展示一次插屏广告
 
-    init(adClient) {
-        if (adClient) {
-            this.adClient = adClient;
-            this.enabled = true;
-        }
+    init(config = AD_CONFIG) {
+        this.enabled = !!config.enabled && !!config.adClient;
+        this.adClient = config.adClient || '';
+        this.slots = config.slots || this.slots;
+        if (!this.enabled) return;
+        this.loadAdsenseScript();
+    },
+
+    loadAdsenseScript() {
+        const sdkId = 'adsense-sdk';
+        if (document.getElementById(sdkId)) return;
+        const script = document.createElement('script');
+        script.id = sdkId;
+        script.async = true;
+        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${this.adClient}`;
+        script.crossOrigin = 'anonymous';
+        document.head.appendChild(script);
     },
 
     createBannerAd(containerId, adSlot) {
@@ -55,16 +82,16 @@ const AdManager = {
     showResultAd() {
         if (!this.enabled) return;
         if (!this.onRoundEnd()) return;
-        this.createBannerAd('ad-slot-result', '');
+        this.createBannerAd('ad-slot-result', this.slots.result);
     },
 
     showGameOverAd() {
         if (!this.enabled) return;
-        this.createBannerAd('ad-slot-gameover', '');
+        this.createBannerAd('ad-slot-gameover', this.slots.gameover);
     },
 
     showStartAd() {
         if (!this.enabled) return;
-        this.createBannerAd('ad-slot-start', '');
+        this.createBannerAd('ad-slot-start', this.slots.start);
     },
 };

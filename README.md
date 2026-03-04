@@ -35,6 +35,25 @@
 - **Vercel**: 连接仓库，自动部署
 - **Netlify**: 拖拽文件夹即可
 
+## 赚钱模式（广告变现）
+
+项目已内置广告位与合规页面，按下面步骤即可启用：
+
+1. 上线站点（推荐 GitHub Pages）：确保线上地址可访问
+2. 申请 Google AdSense 并通过审核
+3. 编辑 `js/ads.js` 中的 `AD_CONFIG`
+   - `enabled: true`
+   - `adClient: 'ca-pub-你的ID'`
+   - 可选填写 `slots.start/result/gameover`
+4. 提交并推送代码，刷新线上页面
+
+### 合规页面
+
+- `privacy.html` 隐私政策
+- `about.html` 关于页面
+
+主页面右下角已提供入口，便于广告审核检查。
+
 ## 技术栈
 
 纯 HTML / CSS / JavaScript，无任何框架依赖。
