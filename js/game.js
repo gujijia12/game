@@ -433,7 +433,8 @@ function applySynergyBuffs(units, synergies, isEnemy = false) {
 /* ===== AI 对手生成 ===== */
 
 function generateEnemyArmy(round) {
-    const config = ROUND_CONFIGS[round - 1];
+    const config = ROUND_CONFIGS[round - 1] || ROUND_CONFIGS[ROUND_CONFIGS.length - 1];
+    if (!config) return [];
     const units = [];
     let budgetLeft = config.budget;
     let unitsPlaced = 0;
@@ -519,6 +520,10 @@ function placeEnemyOnBoard(units) {
 /* ===== 回合管理 ===== */
 
 function startPrepPhase() {
+    if (gameState.round > MAX_ROUND) {
+        gameState.phase = 'result';
+        return;
+    }
     gameState.phase = 'prep';
     if (!gameState.shopLocked) {
         rollShop();
@@ -527,6 +532,8 @@ function startPrepPhase() {
 }
 
 function startCombatPhase() {
+    if (gameState.phase !== 'prep') return false;
+    if (gameState.round > MAX_ROUND) return false;
     if (getBoardUnitCount() === 0) return false;
 
     gameState.phase = 'combat';
@@ -543,8 +550,13 @@ function startCombatPhase() {
     return true;
 }
 
-function endCombat(playerWon, survivingEnemies) {
-    if (playerWon) {
+function endCombat(playerWon, survivingEnemies, combatMeta = {}) {
+    const isTimeoutDraw = !!combatMeta.timeoutDraw;
+
+    if (isTimeoutDraw) {
+        gameState.winStreak = 0;
+        gameState.loseStreak = 0;
+    } else if (playerWon) {
         gameState.winStreak++;
         gameState.loseStreak = 0;
     } else {
@@ -560,11 +572,14 @@ function endCombat(playerWon, survivingEnemies) {
     gameState.phase = 'result';
     gameState.shopLocked = false;
     gameState.round++;
+    const campaignCleared = gameState.round > MAX_ROUND;
 
     return {
         playerWon,
+        isTimeoutDraw,
+        campaignCleared,
         goldInfo,
-        damage: playerWon ? 0 : (survivingEnemies.reduce((sum, u) => sum + u.cost * u.star, 0) + Math.max(1, Math.floor((gameState.round - 1) / 3))),
+        damage: (playerWon || isTimeoutDraw) ? 0 : (survivingEnemies.reduce((sum, u) => sum + u.cost * u.star, 0) + Math.max(1, Math.floor((gameState.round - 1) / 3))),
         gameOver: gameState.hp <= 0
     };
 }

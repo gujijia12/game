@@ -16,6 +16,7 @@ class CombatSystem {
     }
 
     startCombat(playerBoard, enemyBoard, playerSynergies, enemySynergies) {
+        this.stop();
         this.playerUnits = [];
         this.enemyUnits = [];
         this.combatLog = [];
@@ -83,6 +84,7 @@ class CombatSystem {
             critChance: unit.critChance || 0,
             shieldChance: unit.shieldChance || 0,
             pureDamageBonus: unit.pureDamageBonus || 0,
+            spellDamageBonus: unit.spellDamageBonus || 0,
             attackSpeedBonus: unit.attackSpeedBonus || 0,
             attackCooldown: 0,
             target: null,
@@ -155,6 +157,7 @@ class CombatSystem {
         const enemyAlive = this.enemyUnits.filter(u => u.alive);
 
         if (playerAlive.length === 0 || enemyAlive.length === 0 || this.tickCount >= this.maxTicks) {
+            const timedOut = this.tickCount >= this.maxTicks && playerAlive.length > 0 && enemyAlive.length > 0;
             clearInterval(this.tickInterval);
             this.tickInterval = null;
 
@@ -163,7 +166,7 @@ class CombatSystem {
 
             setTimeout(() => {
                 if (this.onCombatEnd) {
-                    this.onCombatEnd(playerWon, surviving);
+                    this.onCombatEnd(playerWon, surviving, { timeoutDraw: timedOut });
                 }
             }, 500);
         }
@@ -180,6 +183,9 @@ class CombatSystem {
 
         if (attacker.pureDamageBonus > 0) {
             damage += Math.round(attacker.attack * attacker.pureDamageBonus);
+        }
+        if (attacker.spellDamageBonus > 0) {
+            damage += Math.round(attacker.attack * attacker.spellDamageBonus * 0.5);
         }
 
         if (Math.random() < (target.evasion || 0)) {

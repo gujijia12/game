@@ -26,12 +26,14 @@ const AdManager = {
         gameover: ''
     },
     roundsSinceLastAd: 0,
+    mountedSlots: {},
     AD_INTERVAL: 3,     // 每隔几回合展示一次插屏广告
 
     init(config = AD_CONFIG) {
         this.enabled = !!config.enabled && !!config.adClient;
         this.adClient = config.adClient || '';
         this.slots = config.slots || this.slots;
+        this.resetSession();
         if (!this.enabled) return;
         this.loadAdsenseScript();
     },
@@ -51,6 +53,11 @@ const AdManager = {
         if (!this.enabled) return;
         const container = document.getElementById(containerId);
         if (!container) return;
+        if (this.mountedSlots[containerId]) return;
+        if (typeof window.adsbygoogle === 'undefined') {
+            console.warn('[AdManager] AdSense SDK not ready yet, skip ad render:', containerId);
+            return;
+        }
 
         container.innerHTML = '';
 
@@ -65,8 +72,9 @@ const AdManager = {
 
         try {
             (window.adsbygoogle = window.adsbygoogle || []).push({});
+            this.mountedSlots[containerId] = true;
         } catch (e) {
-            // AdSense not loaded
+            console.warn('[AdManager] Failed to render ad slot:', containerId, e);
         }
     },
 
@@ -94,4 +102,9 @@ const AdManager = {
         if (!this.enabled) return;
         this.createBannerAd('ad-slot-start', this.slots.start);
     },
+
+    resetSession() {
+        this.roundsSinceLastAd = 0;
+        this.mountedSlots = {};
+    }
 };

@@ -6,6 +6,8 @@ const UI = {
     elements: {},
 
     isMobile: false,
+    battleStarting: false,
+    maxFloatingNumbers: 50,
 
     init() {
         this.isMobile = window.innerWidth <= 768;
@@ -155,8 +157,16 @@ const UI = {
 
         this.elements.btnContinue.addEventListener('click', () => {
             this.elements.battleResult.classList.add('hidden');
+            this.battleStarting = false;
             if (gameState.hp <= 0) {
                 this.showGameOver();
+                return;
+            }
+            if (gameState.round > MAX_ROUND) {
+                initGameState();
+                AdManager.resetSession();
+                startPrepPhase();
+                this.renderAll();
                 return;
             }
             startPrepPhase();
@@ -165,14 +175,18 @@ const UI = {
 
         this.elements.btnRestart.addEventListener('click', () => {
             this.elements.gameOver.classList.add('hidden');
+            this.battleStarting = false;
             initGameState();
+            AdManager.resetSession();
             startPrepPhase();
             this.renderAll();
         });
 
         this.elements.btnStart.addEventListener('click', () => {
             this.elements.startScreen.classList.add('hidden');
+            this.battleStarting = false;
             initGameState();
+            AdManager.resetSession();
             startPrepPhase();
             this.renderAll();
         });
@@ -206,6 +220,7 @@ const UI = {
 
         if (this.elements.btnToggleDetail) {
             this.elements.btnToggleDetail.addEventListener('click', () => {
+                if (!this.elements.mobileUnitDetailContent?.innerHTML.trim()) return;
                 this.elements.mobileDetailOverlay.classList.remove('hidden');
             });
         }
@@ -442,6 +457,9 @@ const UI = {
             card.addEventListener('mouseenter', () => {
                 this.showUnitDefDetail(def);
             });
+            card.addEventListener('touchstart', () => {
+                this.showUnitDefDetail(def);
+            }, { passive: true });
 
             this.elements.shopUnits.appendChild(card);
         }
@@ -574,9 +592,16 @@ const UI = {
     /* ===== 战斗相关 ===== */
 
     startBattle() {
+        if (this.battleStarting || combatSystem.tickInterval) return;
+        if (gameState.round > MAX_ROUND) {
+            this.showCampaignClear();
+            return;
+        }
         if (!startCombatPhase()) return;
+        this.battleStarting = true;
 
         this.elements.enemyName.textContent = gameState.enemyName;
+        this.clearCombatLog();
         this.renderAll();
 
         const enemyArmy = generateEnemyArmy(gameState.round);
@@ -589,8 +614,9 @@ const UI = {
             this.handleCombatEvents(events);
         };
 
-        combatSystem.onCombatEnd = (playerWon, survivingEnemies) => {
-            const result = endCombat(playerWon, survivingEnemies);
+        combatSystem.onCombatEnd = (playerWon, survivingEnemies, combatMeta) => {
+            this.battleStarting = false;
+            const result = endCombat(playerWon, survivingEnemies, combatMeta);
             this.showBattleResult(playerWon, result);
         };
 
@@ -619,6 +645,11 @@ const UI = {
                     attackerEl.classList.add('attacking');
                     setTimeout(() => attackerEl.classList.remove('attacking'), 300);
                 }
+                if (event.targetDied) {
+                    this.addCombatLogEntry(`${event.attacker.name} 击杀了 ${event.target.name}`, 'log-win');
+                }
+            } else if (event.type === 'miss') {
+                this.addCombatLogEntry(`${event.target.name} 闪避了 ${event.attacker.name} 的攻击`, 'log-info');
             } else if (event.type === 'death') {
                 const el = document.querySelector(`[data-uid="${event.unit.uid}"]`);
                 if (el) {
@@ -629,6 +660,9 @@ const UI = {
     },
 
     showFloatingNumber(targetEl, damage, isCrit) {
+        while (this.elements.floatingNumbers.childElementCount >= this.maxFloatingNumbers) {
+            this.elements.floatingNumbers.firstElementChild?.remove();
+        }
         const rect = targetEl.getBoundingClientRect();
         const numEl = document.createElement('div');
         numEl.className = `floating-number ${isCrit ? 'crit' : 'damage'}`;
@@ -644,7 +678,10 @@ const UI = {
         this.elements.battleResult.classList.remove('hidden');
         AdManager.showResultAd();
 
-        if (playerWon) {
+        if (result.isTimeoutDraw) {
+            this.elements.resultTitle.textContent = '⏳ 平局';
+            this.elements.resultTitle.style.color = '#ffb74d';
+        } else if (playerWon) {
             this.elements.resultTitle.textContent = '✅ 胜利！';
             this.elements.resultTitle.style.color = '#4caf50';
         } else {
@@ -654,7 +691,9 @@ const UI = {
 
         const g = result.goldInfo;
         let detail = '';
-        if (!playerWon) {
+        if (result.isTimeoutDraw) {
+            detail += `<div>双方激战至超时，判定平局，本回合不掉血。</div>`;
+        } else if (!playerWon) {
             detail += `<div>💔 受到 ${result.damage} 点伤害，剩余生命: ${gameState.hp}</div>`;
         }
         if (gameState.winStreak > 1) {
@@ -668,6 +707,12 @@ const UI = {
 
         if (result.gameOver) {
             detail += `<div style="margin-top:8px;color:#f44336;font-weight:bold">☠️ 你被击败了!</div>`;
+        }
+        if (result.campaignCleared) {
+            detail += `<div style="margin-top:8px;color:#66bb6a;font-weight:bold">🏆 恭喜通关 30 回合挑战！</div>`;
+            this.elements.btnContinue.textContent = '重新开始';
+        } else {
+            this.elements.btnContinue.textContent = '继续';
         }
 
         this.elements.resultDetail.innerHTML = detail;
@@ -683,11 +728,25 @@ const UI = {
         `;
     },
 
+    showCampaignClear() {
+        this.elements.battleResult.classList.remove('hidden');
+        this.elements.resultTitle.textContent = '🏆 挑战已通关';
+        this.elements.resultTitle.style.color = '#66bb6a';
+        this.elements.resultDetail.innerHTML = `
+            <div>你已完成 30 回合挑战。</div>
+            <div style="margin-top:8px">点击下方重新开始一局。</div>
+        `;
+        this.elements.btnContinue.textContent = '重新开始';
+    },
+
     addCombatLogEntry(text, type = '') {
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
         entry.textContent = text;
         this.elements.combatLog.appendChild(entry);
+        while (this.elements.combatLog.childElementCount > 80) {
+            this.elements.combatLog.firstElementChild?.remove();
+        }
         this.elements.combatLog.scrollTop = this.elements.combatLog.scrollHeight;
     },
 
