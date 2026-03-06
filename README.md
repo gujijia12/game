@@ -1,6 +1,6 @@
 # 电子斗蛐蛐 - 自走棋
 
-一款纯前端实现的自走棋单机网页游戏，无需服务器，打开即玩。
+一款纯前端实现的自走棋网页游戏，支持本地游玩，也支持通过内置接口接收玩家建议。
 
 ## 玩法
 
@@ -34,6 +34,25 @@
 - **GitHub Pages**: 推送到仓库，在 Settings → Pages 中开启
 - **Vercel**: 连接仓库，自动部署
 - **Netlify**: 拖拽文件夹即可
+
+## 玩家建议收集（真实在线接收）
+
+项目已内置建议反馈弹窗，点击页面顶部 `💬 建议` 可提交。  
+如使用 `server.ps1` 启动服务，建议会写入服务器本地文件 `data/feedback.json`。
+
+### 接口
+
+- `POST /api/feedback` 提交建议
+- `GET /api/feedback?limit=100` 查看最近建议
+
+### 启动方式
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server.ps1
+```
+
+> 说明：如果你部署到纯静态平台（如 GitHub Pages），`/api/feedback` 不存在，建议会退回本机保存。  
+> 要跨设备统一接收建议，请将本项目部署到支持后端接口的环境（如 Windows 服务器运行 `server.ps1`、Node 服务、云函数等）。
 
 ## 赚钱模式（广告变现）
 

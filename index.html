@@ -45,6 +45,11 @@
                 <div class="info-group">
                     <span id="phase-text" class="phase-label">准备阶段</span>
                 </div>
+                <div class="info-group">
+                    <button id="btn-guide" class="shop-btn guide-btn">📘 指引</button>
+                    <button id="btn-achievements" class="shop-btn guide-btn">🏆 成就</button>
+                    <button id="btn-feedback" class="shop-btn guide-btn">💬 建议</button>
+                </div>
             </div>
         </div>
 
@@ -125,10 +130,12 @@
         <div id="shop-area">
             <div id="shop-units"></div>
             <div id="shop-controls">
-                <button id="btn-reroll" class="shop-btn">🎲 刷新 (2金)</button>
-                <button id="btn-buy-xp" class="shop-btn">📈 买经验 (4金)</button>
+                <button id="btn-reroll" class="shop-btn">🎲 刷新 2金(D)</button>
+                <button id="btn-buy-xp" class="shop-btn">📈 买经验 4金(F)</button>
                 <button id="btn-lock" class="shop-btn">🔒 锁定</button>
                 <button id="btn-ready" class="shop-btn ready-btn">⚔️ 开战</button>
+                <button id="btn-speed" class="shop-btn speed-btn">▶ 1x</button>
+                <button id="btn-auto-arrange" class="shop-btn arrange-btn">📐 布阵</button>
                 <button id="btn-sell" class="shop-btn sell-btn">💰 出售</button>
             </div>
         </div>
@@ -156,6 +163,58 @@
             </div>
         </div>
 
+        <!-- 新手指引弹窗 -->
+        <div id="guide-modal" class="modal hidden">
+            <div class="modal-content guide-content">
+                <div class="guide-header">
+                    <h2>新手指引</h2>
+                    <button id="btn-guide-close" class="mobile-overlay-close">✕</button>
+                </div>
+                <div class="guide-tabs">
+                    <button class="guide-tab active" data-tab="basic">基础玩法</button>
+                    <button class="guide-tab" data-tab="synergy">羁绊效果</button>
+                    <button class="guide-tab" data-tab="stats">属性说明</button>
+                    <button class="guide-tab" data-tab="units">棋子图鉴</button>
+                </div>
+                <div id="guide-body" class="guide-body"></div>
+            </div>
+        </div>
+
+        <!-- 成就弹窗 -->
+        <div id="achievement-modal" class="modal hidden">
+            <div class="modal-content guide-content">
+                <div class="guide-header">
+                    <h2>🏆 成就</h2>
+                    <button id="btn-achievement-close" class="mobile-overlay-close">✕</button>
+                </div>
+                <div id="achievement-body" class="guide-body"></div>
+            </div>
+        </div>
+
+        <!-- 建议反馈弹窗 -->
+        <div id="feedback-modal" class="modal hidden">
+            <div class="modal-content guide-content">
+                <div class="guide-header">
+                    <h2>💬 提交建议</h2>
+                    <button id="btn-feedback-close" class="mobile-overlay-close">✕</button>
+                </div>
+                <div class="feedback-form">
+                    <label for="feedback-name">昵称（可选）</label>
+                    <input id="feedback-name" type="text" maxlength="30" placeholder="例如：热心玩家">
+                    <label for="feedback-contact">联系方式（可选）</label>
+                    <input id="feedback-contact" type="text" maxlength="60" placeholder="QQ / 微信 / 邮箱">
+                    <label for="feedback-content">建议内容</label>
+                    <textarea id="feedback-content" maxlength="500" placeholder="请输入你对游戏的建议、问题反馈或想要的新玩法..."></textarea>
+                    <div class="feedback-actions">
+                        <button id="btn-feedback-submit" class="shop-btn ready-btn">提交建议</button>
+                        <button id="btn-feedback-clear" class="shop-btn sell-btn">清空历史</button>
+                    </div>
+                </div>
+                <div class="guide-section-title">最近建议（本机保存）</div>
+                <div id="feedback-list" class="feedback-list"></div>
+            </div>
+        </div>
+
         <!-- 开始画面 -->
         <div id="start-screen" class="modal">
             <div class="modal-content start-content">
@@ -167,6 +226,14 @@
                     <p>🔗 凑齐羁绊获得加成</p>
                     <p>⚔️ 棋子自动战斗</p>
                     <p>🏆 挑战30回合，生存到最后！</p>
+                </div>
+                <div class="difficulty-picker">
+                    <label for="difficulty-select">难度：</label>
+                    <select id="difficulty-select">
+                        <option value="normal">普通 (100HP)</option>
+                        <option value="hard">困难 (80HP, 敌+20%)</option>
+                        <option value="nightmare">噩梦 (60HP, 敌+40%)</option>
+                    </select>
                 </div>
                 <div id="ad-slot-start" class="ad-slot"></div>
                 <button id="btn-start" class="shop-btn ready-btn start-btn">开始游戏</button>

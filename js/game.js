@@ -8,7 +8,7 @@ function createUnit(defId, star = 1) {
     const def = getUnitDef(defId);
     const mult = STAR_MULTIPLIERS[star];
     return {
-        uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        uid: generateUid(),
         defId: def.id,
         name: def.name,
         icon: def.icon,
@@ -33,16 +33,18 @@ function createUnit(defId, star = 1) {
     };
 }
 
-function initGameState() {
+function initGameState(difficulty = 'normal') {
+    const diff = DIFFICULTY_MODES[difficulty] || DIFFICULTY_MODES.normal;
     gameState = {
-        phase: 'prep',          // 'prep' | 'combat' | 'result'
+        phase: 'prep',
         round: 1,
-        hp: BASE_HP,
-        maxHp: BASE_HP,
-        gold: 5,
-        level: 1,
+        hp: diff.startHp,
+        maxHp: diff.startHp,
+        gold: 6,
+        level: 3,
         xp: 0,
-        maxBoardUnits: 1,
+        maxBoardUnits: 3,
+        difficulty: difficulty,
 
         winStreak: 0,
         loseStreak: 0,
@@ -53,13 +55,20 @@ function initGameState() {
         shop: [],
         shopLocked: false,
 
-        selectedUnit: null,      // { source: 'board'|'bench', row, col }
+        selectedUnit: null,
 
         combatUnits: null,
         combatLog: [],
 
         enemyHp: 100,
         enemyName: '',
+
+        sessionStats: {
+            bossesKilled: 0,
+            racesUsed: new Set(),
+            totalInterest: 0,
+            threeStarMerged: false,
+        },
     };
 
     updateMaxBoardUnits();
@@ -92,6 +101,10 @@ function awardRoundGold() {
     const roundBonus = Math.floor(gameState.round / 5);
     const total = baseGold + interest + streak + roundBonus;
     gameState.gold += total;
+    if (gameState.sessionStats) {
+        gameState.sessionStats.totalInterest += interest;
+        if (interest >= 5) Achievement.unlock('interest_10');
+    }
     return { baseGold, interest, streak, roundBonus, total };
 }
 
@@ -114,8 +127,10 @@ function rollShop() {
     const level = Math.min(gameState.level, 9);
     const odds = TIER_ROLL_ODDS[level];
     const shop = [];
+    const diff = DIFFICULTY_MODES[gameState.difficulty] || DIFFICULTY_MODES.normal;
+    const shopSize = diff.shopSize || SHOP_SIZE;
 
-    for (let i = 0; i < SHOP_SIZE; i++) {
+    for (let i = 0; i < shopSize; i++) {
         const roll = Math.random();
         let cumulative = 0;
         let tier = 1;
@@ -320,6 +335,11 @@ function mergeThreeUnits(locations, defId, newStar) {
     } else {
         gameState.board[keepLoc.row][keepLoc.col] = newUnit;
     }
+
+    if (newStar >= 3) {
+        if (gameState.sessionStats) gameState.sessionStats.threeStarMerged = true;
+        Achievement.unlock('three_star');
+    }
 }
 
 /* ===== 羁绊计算 ===== */
@@ -336,6 +356,7 @@ function calculateSynergies() {
             raceCounts[unit.race] = (raceCounts[unit.race] || 0) + 1;
             classCounts[unit.class] = (classCounts[unit.class] || 0) + 1;
             if (unit.race === 'demon') uniqueDemons.add(unit.defId);
+            if (gameState.sessionStats) gameState.sessionStats.racesUsed.add(unit.race);
         }
     }
 
@@ -346,13 +367,21 @@ function calculateSynergies() {
         if (count === 0) continue;
 
         if (raceId === 'demon') {
-            if (uniqueDemons.size === count && count > 0) {
-                activeSynergies.push({
-                    type: 'race', id: raceId, name: race.name, icon: race.icon,
-                    count: count, threshold: 1, active: true,
-                    effectKey: 'demon_1'
-                });
-            }
+            const uniqueCount = uniqueDemons.size;
+            const thresholds = [2, 4];
+            let bestT = 0;
+            for (const t of thresholds) { if (uniqueCount >= t) bestT = t; }
+            const isActive = bestT > 0;
+            let bonusText = thresholds[0] + '个不同激活';
+            if (isActive) bonusText = race.bonuses[bestT];
+            else if (uniqueCount < count) bonusText = `${uniqueCount}种/${thresholds[0]}种激活`;
+            activeSynergies.push({
+                type: 'race', id: raceId, name: race.name, icon: race.icon,
+                count: count, threshold: bestT, active: isActive,
+                thresholds: thresholds,
+                bonusText: bonusText,
+                effectKey: isActive ? `demon_${bestT}` : null
+            });
             continue;
         }
 
@@ -388,6 +417,10 @@ function calculateSynergies() {
             bonusText: bestThreshold > 0 ? cls.bonuses[bestThreshold] : thresholds[0] + '个激活',
             effectKey: bestThreshold > 0 ? `${classId}_${bestThreshold}` : null
         });
+    }
+
+    for (const syn of activeSynergies) {
+        if (syn.id === 'demon' && syn.active && syn.threshold >= 4) Achievement.unlock('demon_lord');
     }
 
     return activeSynergies;
@@ -432,7 +465,81 @@ function applySynergyBuffs(units, synergies, isEnemy = false) {
 
 /* ===== AI 对手生成 ===== */
 
+function isBossRound(round) {
+    return BOSS_ROUNDS.includes(round);
+}
+
+function createBossUnit(round) {
+    const cfg = BOSS_CONFIGS[round];
+    if (!cfg) return null;
+    return {
+        uid: generateUid(),
+        defId: cfg.defId,
+        name: cfg.name,
+        icon: cfg.icon,
+        cost: cfg.cost,
+        race: 'boss',
+        class: 'boss',
+        star: 1,
+        maxHp: cfg.hp,
+        hp: cfg.hp,
+        attack: cfg.attack,
+        armor: cfg.armor,
+        attackSpeed: cfg.attackSpeed,
+        range: cfg.range,
+        currentHp: 0,
+        evasion: 0.05,
+        critChance: 0.1,
+        shieldChance: 0,
+        pureDamageBonus: 0,
+        spellDamageBonus: 0,
+        attackSpeedBonus: 0,
+        isBoss: true,
+        enrageAtHpPct: cfg.enrageAtHpPct || 0,
+    };
+}
+
+function createBossMinion(minionDef) {
+    return {
+        uid: generateUid(),
+        defId: 'boss_minion',
+        name: minionDef.name,
+        icon: minionDef.icon,
+        cost: minionDef.cost,
+        race: 'boss', class: 'boss',
+        star: 1,
+        maxHp: minionDef.hp, hp: minionDef.hp,
+        attack: minionDef.attack,
+        armor: minionDef.armor,
+        attackSpeed: minionDef.attackSpeed,
+        range: minionDef.range,
+        currentHp: 0, evasion: 0, critChance: 0,
+        shieldChance: 0, pureDamageBonus: 0,
+        spellDamageBonus: 0, attackSpeedBonus: 0,
+        isBoss: false,
+    };
+}
+
 function generateEnemyArmy(round) {
+    if (isBossRound(round)) {
+        const boss = createBossUnit(round);
+        if (!boss) return [];
+        const cfg = BOSS_CONFIGS[round];
+        const army = [boss];
+        if (cfg.minions) {
+            for (const m of cfg.minions) army.push(createBossMinion(m));
+        }
+        const diff = DIFFICULTY_MODES[gameState.difficulty] || DIFFICULTY_MODES.normal;
+        if (diff.enemyMul !== 1.0) {
+            for (const u of army) {
+                u.maxHp = Math.round(u.maxHp * diff.enemyMul);
+                u.hp = u.maxHp;
+                u.attack = Math.round(u.attack * diff.enemyMul);
+            }
+        }
+        return army;
+    }
+
     const config = ROUND_CONFIGS[round - 1] || ROUND_CONFIGS[ROUND_CONFIGS.length - 1];
     if (!config) return [];
     const units = [];
@@ -454,8 +561,17 @@ function generateEnemyArmy(round) {
 
         const unit = createUnit(chosen.id, star);
         units.push(unit);
-        budgetLeft -= chosen.cost * star;
+        budgetLeft -= chosen.cost * star * star;
         unitsPlaced++;
+    }
+
+    const scaling = getEnemyScaling(round);
+    const diff = DIFFICULTY_MODES[gameState.difficulty] || DIFFICULTY_MODES.normal;
+    for (const u of units) {
+        u.maxHp = Math.round(u.maxHp * scaling.hpMul * diff.enemyMul);
+        u.hp = u.maxHp;
+        u.attack = Math.round(u.attack * scaling.attackMul * diff.enemyMul);
+        u.armor += scaling.armorAdd;
     }
 
     return units;
@@ -463,6 +579,18 @@ function generateEnemyArmy(round) {
 
 function placeEnemyOnBoard(units) {
     const board = Array.from({ length: BOARD_ROWS }, () => Array(BOARD_COLS).fill(null));
+
+    const hasBoss = units.some(u => u.isBoss);
+    if (hasBoss) {
+        const boss = units.find(u => u.isBoss);
+        const minions = units.filter(u => !u.isBoss);
+        board[1][3] = boss;
+        const minionSlots = [[0, 2], [0, 4], [0, 1], [0, 5], [1, 1], [1, 5]];
+        minions.forEach((m, i) => {
+            if (minionSlots[i]) board[minionSlots[i][0]][minionSlots[i][1]] = m;
+        });
+        return board;
+    }
 
     const positions = [];
     for (let r = 0; r < BOARD_ROWS; r++) {
@@ -517,6 +645,56 @@ function placeEnemyOnBoard(units) {
     return board;
 }
 
+/* ===== 自动布阵 ===== */
+
+function autoArrange() {
+    if (gameState.phase !== 'prep') return false;
+
+    const boardCount = getBoardUnitCount();
+    let canPlace = gameState.maxBoardUnits - boardCount;
+
+    const benchUnits = [];
+    for (let i = 0; i < BENCH_SIZE; i++) {
+        if (gameState.bench[i]) {
+            benchUnits.push({ idx: i, unit: gameState.bench[i] });
+        }
+    }
+    if (benchUnits.length === 0 || canPlace <= 0) return false;
+
+    benchUnits.sort((a, b) => b.unit.cost - a.unit.cost);
+
+    const melee = benchUnits.filter(b => b.unit.range <= 1);
+    const ranged = benchUnits.filter(b => b.unit.range > 1);
+    const ordered = [...melee, ...ranged];
+
+    const frontCells = [];
+    const backCells = [];
+    for (let r = 0; r < BOARD_ROWS; r++) {
+        for (let c = 0; c < BOARD_COLS; c++) {
+            if (!gameState.board[r][c]) {
+                if (r <= 1) frontCells.push({ r, c });
+                else backCells.push({ r, c });
+            }
+        }
+    }
+
+    let placed = 0;
+    for (const { idx, unit } of ordered) {
+        if (placed >= canPlace) break;
+        const isMelee = unit.range <= 1;
+        const pool = isMelee ? frontCells : backCells;
+        const cell = pool.shift() || (isMelee ? backCells.shift() : frontCells.shift());
+        if (cell && !gameState.board[cell.r][cell.c]) {
+            gameState.board[cell.r][cell.c] = unit;
+            gameState.bench[idx] = null;
+            placed++;
+        }
+    }
+
+    gameState.selectedUnit = null;
+    return placed > 0;
+}
+
 /* ===== 回合管理 ===== */
 
 function startPrepPhase() {
@@ -528,7 +706,7 @@ function startPrepPhase() {
     if (!gameState.shopLocked) {
         rollShop();
     }
-    addXp(1);
+    addXp(gameState.round >= 6 ? 2 : 1);
 }
 
 function startCombatPhase() {
@@ -539,12 +717,17 @@ function startCombatPhase() {
     gameState.phase = 'combat';
     gameState.selectedUnit = null;
 
-    const roundNames = [
-        '新手试炼', '林间小径', '暗影峡谷', '雷鸣山谷', '烈焰深渊',
-        '冰封冻土', '古老遗迹', '幽暗森林', '末日荒原', '龙巢之心',
-    ];
-    const nameIdx = Math.floor((gameState.round - 1) / 3) % roundNames.length;
-    gameState.enemyName = `第${gameState.round}波 - ${roundNames[nameIdx]}`;
+    if (isBossRound(gameState.round) && BOSS_CONFIGS[gameState.round]) {
+        const boss = BOSS_CONFIGS[gameState.round];
+        gameState.enemyName = `⚠️ BOSS - ${boss.name}`;
+    } else {
+        const roundNames = [
+            '新手试炼', '林间小径', '暗影峡谷', '雷鸣山谷', '烈焰深渊',
+            '冰封冻土', '古老遗迹', '幽暗森林', '末日荒原', '龙巢之心',
+        ];
+        const nameIdx = Math.floor((gameState.round - 1) / 3) % roundNames.length;
+        gameState.enemyName = `第${gameState.round}波 - ${roundNames[nameIdx]}`;
+    }
     gameState.enemyHp = 100;
 
     return true;
@@ -552,6 +735,10 @@ function startCombatPhase() {
 
 function endCombat(playerWon, survivingEnemies, combatMeta = {}) {
     const isTimeoutDraw = !!combatMeta.timeoutDraw;
+    const currentRound = gameState.round;
+    const wasBoss = isBossRound(currentRound);
+    let bossReward = 0;
+    let damageTaken = 0;
 
     if (isTimeoutDraw) {
         gameState.winStreak = 0;
@@ -559,26 +746,98 @@ function endCombat(playerWon, survivingEnemies, combatMeta = {}) {
     } else if (playerWon) {
         gameState.winStreak++;
         gameState.loseStreak = 0;
+        if (wasBoss && BOSS_CONFIGS[currentRound]) {
+            bossReward = BOSS_CONFIGS[currentRound].reward;
+            gameState.gold += bossReward;
+        }
     } else {
         gameState.loseStreak++;
         gameState.winStreak = 0;
-        const damage = survivingEnemies.reduce((sum, u) => sum + u.cost * u.star, 0);
-        const roundDamage = Math.max(1, Math.floor(gameState.round / 3));
-        const totalDamage = damage + roundDamage;
-        gameState.hp = Math.max(0, gameState.hp - totalDamage);
+        if (currentRound > WARMUP_ROUNDS) {
+            const unitDmg = survivingEnemies.reduce((sum, u) => sum + (u.isBoss ? 15 : u.cost * u.star), 0);
+            damageTaken = unitDmg + Math.max(1, Math.floor(currentRound / 3));
+            gameState.hp = Math.max(0, gameState.hp - damageTaken);
+        }
+    }
+
+    if (playerWon && gameState.winStreak >= 5) Achievement.unlock('win_streak_5');
+    if (playerWon && wasBoss && gameState.sessionStats) {
+        gameState.sessionStats.bossesKilled++;
+        if (gameState.sessionStats.bossesKilled >= 3) Achievement.unlock('boss_slayer');
+    }
+    if (playerWon) {
+        const boardUnits = [];
+        for (let r = 0; r < BOARD_ROWS; r++) for (let c = 0; c < BOARD_COLS; c++) if (gameState.board[r][c]) boardUnits.push(gameState.board[r][c]);
+        if (boardUnits.length > 0 && boardUnits.every(u => u.cost === 1)) Achievement.unlock('budget_win');
     }
 
     const goldInfo = awardRoundGold();
     gameState.phase = 'result';
     gameState.round++;
-    const campaignCleared = gameState.round > MAX_ROUND;
+    const campaignCleared = playerWon && currentRound >= MAX_ROUND;
+
+    if (campaignCleared) {
+        Achievement.unlock('first_clear');
+        if (gameState.hp >= gameState.maxHp) Achievement.unlock('perfect_clear');
+        if (gameState.sessionStats && gameState.sessionStats.racesUsed.size >= 5) Achievement.unlock('all_races');
+        Achievement.incrementGames();
+    } else if (gameState.hp <= 0) {
+        Achievement.incrementGames();
+    }
 
     return {
         playerWon,
         isTimeoutDraw,
         campaignCleared,
         goldInfo,
-        damage: (playerWon || isTimeoutDraw) ? 0 : (survivingEnemies.reduce((sum, u) => sum + u.cost * u.star, 0) + Math.max(1, Math.floor((gameState.round - 1) / 3))),
+        bossReward,
+        wasBoss,
+        isWarmup: currentRound <= WARMUP_ROUNDS,
+        damage: damageTaken,
         gameOver: gameState.hp <= 0
     };
 }
+
+/* ===== 成就系统 ===== */
+
+const Achievement = {
+    _key: 'autochess_achievements',
+    _statsKey: 'autochess_stats',
+
+    getAll() {
+        try { return JSON.parse(localStorage.getItem(this._key)) || {}; } catch { return {}; }
+    },
+
+    getStats() {
+        try { return JSON.parse(localStorage.getItem(this._statsKey)) || { gamesPlayed: 0, bestRound: 0, bestHp: 0 }; } catch { return { gamesPlayed: 0, bestRound: 0, bestHp: 0 }; }
+    },
+
+    unlock(id) {
+        const all = this.getAll();
+        if (all[id]) return false;
+        all[id] = Date.now();
+        try { localStorage.setItem(this._key, JSON.stringify(all)); } catch { /* storage unavailable */ }
+        const def = ACHIEVEMENTS.find(a => a.id === id);
+        if (def && typeof UI !== 'undefined') {
+            UI.showToast(`${def.icon} 成就解锁：${def.name}`);
+        }
+        return true;
+    },
+
+    isUnlocked(id) {
+        return !!this.getAll()[id];
+    },
+
+    incrementGames() {
+        const stats = this.getStats();
+        stats.gamesPlayed++;
+        if (gameState) {
+            stats.bestRound = Math.max(stats.bestRound, gameState.round - 1);
+            if (gameState.round > MAX_ROUND) {
+                stats.bestHp = Math.max(stats.bestHp, gameState.hp);
+            }
+        }
+        try { localStorage.setItem(this._statsKey, JSON.stringify(stats)); } catch { /* storage unavailable */ }
+        if (stats.gamesPlayed >= 10) this.unlock('ten_games');
+    },
+};
